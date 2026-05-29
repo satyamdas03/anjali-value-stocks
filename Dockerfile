@@ -28,5 +28,12 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
+# Expose health check port
+EXPOSE 8080
+
+# Health check for Railway
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+
 # Run the scheduler as the main long-running process
 CMD ["python", "scheduler.py"]

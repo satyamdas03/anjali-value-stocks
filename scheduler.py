@@ -2,6 +2,7 @@
 AnjaliValueStocks scheduler.
 Runs full fundamental refresh every 6 hours and lightweight price refresh every 30 minutes.
 Logs to scheduler.log with rotation (keeps last 10 backups).
+Includes HTTP health check on port 8080 for Railway.
 """
 import os
 import sys
@@ -9,6 +10,8 @@ import subprocess
 import logging
 import logging.handlers
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -245,11 +248,41 @@ def price_refresh():
 
 
 # ---------------------------------------------------------
+# Health check HTTP server (for Railway)
+# ---------------------------------------------------------
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass  # Suppress access logs
+
+
+def start_health_server(port=8080):
+    """Start a simple HTTP health check server in a daemon thread."""
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info(f"Health check server started on port {port}")
+
+
+# ---------------------------------------------------------
 # Main
 # ---------------------------------------------------------
 def main():
     print("Scheduler started. Full refresh every 6h, price refresh every 30min.")
     logger.info("Scheduler initializing")
+
+    # Start health check server for Railway
+    start_health_server()
 
     # Ensure the lightweight refresh script is on disk so subprocess can run it
     write_price_refresh_script()
