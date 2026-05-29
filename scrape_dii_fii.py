@@ -2,6 +2,8 @@
 Scrape DII/FII shareholding data from Screener.in for Indian NSE stocks.
 Populates DII Quarter, DII 1Yr, FII Quarter, FII 1Yr columns.
 
+Uses Screener.in search API to resolve ticker → company URL.
+
 Usage:
     python scrape_dii_fii.py
     python scrape_dii_fii.py --update   # Update Indian_Stock_Data.csv in-place
@@ -21,10 +23,10 @@ Our columns are percentage point CHANGES:
 import os
 import sys
 import time
+import json
 import pandas as pd
 import numpy as np
 import re
-import json
 
 try:
     import requests
@@ -46,13 +48,119 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.5",
 }
 
+# Common ticker-to-Screener-slug mapping for popular stocks
+# Screener uses lowercase-hyphenated company names as URL slugs
+TICKER_SLUG_MAP = {
+    "RELIANCE": "reliance-industries",
+    "TCS": "tcs",
+    "HDFCBANK": "hdfc-bank",
+    "INFY": "infosys",
+    "ICICIBANK": "icici-bank",
+    "HINDUNILVR": "hindustan-unilever",
+    "SBIN": "state-bank-of-india",
+    "BHARTIARTL": "bharti-airtel",
+    "ITC": "itc",
+    "KOTAKBANK": "kotak-mahindra-bank",
+    "LT": "larsen-toubro",
+    "HCLTECH": "hcl-technologies",
+    "ASIANPAINT": "asian-paints",
+    "AXISBANK": "axis-bank",
+    "BAJFINANCE": "bajaj-finance",
+    "MARUTI": "maruti-suzuki-india",
+    "SUNPHARMA": "sun-pharmaceutical-industries",
+    "TITAN": "titan-company",
+    "WIPRO": "wipro",
+    "ULTRACEMCO": "ultratech-cement",
+    "ADANIENT": "adani-enterprises",
+    "ONGC": "oil-natural-gas-corporation",
+    "NTPC": "ntpc",
+    "POWERGRID": "power-grid-corporation-of-india",
+    "TATAMOTORS": "tata-motors",
+    "TATASTEEL": "tata-steel",
+    "TATACONSUM": "tata-consumer-products",
+    "BAJAJFINSV": "bajaj-finserv",
+    "HINDALCO": "hindalco-industries",
+    "COALINDIA": "coal-india",
+    "JSWSTEEL": "jsw-steel",
+    "GRASIM": "grasim-industries",
+    "BPCL": "bharat-petroleum-corporation",
+    "IOC": "indian-oil-corporation",
+    "HDFC": "hdfc",
+    "ADANIPORTS": "adani-ports-special-economic-zone",
+    "TECHM": "tech-mahindra",
+    "DIVISLAB": "divis-laboratories",
+    "DRREDDY": "dr-reddys-laboratories",
+    "CIPLA": "cipla",
+    "APOLLOHOSP": "apollo-hospitals-enterprise",
+    "EICHERMOT": "eicher-motors",
+    "M_M": "mahindra-mahindra",
+    "HEROMOTOCO": "hero-motocorp",
+    "BAJAJ-AUTO": "bajaj-auto",
+    "INDUSINDBK": "indusind-bank",
+    "SBILIFE": "sbi-life-insurance-company",
+    "HDFCLIFE": "hdfc-life-insurance-company",
+    "TATAMTRDVR": "tata-motors",
+    "PIDILITIND": "pidilite-industries",
+    "DABUR": "dabur-india",
+    "BRITANNIA": "britannia-industries",
+    "NESTLEIND": "nestle-india",
+    "GAIL": "gail-india",
+    "PNB": "punjab-national-bank",
+    "BANKBARODA": "bank-of-baroda",
+    "CANBK": "canara-bank",
+    "UNIONBANK": "union-bank-of-india",
+    "IDFCFIRSTB": "idfc-first-bank",
+    "FEDERALBNK": "federal-bank",
+    "MUTHOOTFIN": "muthoot-finance",
+    "SHREECEM": "shree-cement",
+    "AMBUJACEM": "ambuja-cements",
+    "ACC": "acc",
+    "DLF": "dlf",
+    "GODREJCP": "godrej-consumer-products",
+    "HAVELLS": "havells-india",
+    "VINATIORGA": "vinati-organics",
+    "PAGEIND": "page-industries",
+    "BOSCHLTD": "bosch",
+    "COLPAL": "colgate-palmolive-india",
+    "MARICO": "marico",
+    "TORNTPHARM": "torrent-pharmaceuticals",
+    "MCDOWELL-N": "united-spirits",
+    "IDEA": "vodafone-idea",
+    "NHPC": "nhpc",
+    "RECLTD": "rec-ltd",
+    "PNBHOUSING": "pnb-housing-finance",
+    "LTF": "lt-investment-holdings",
+    "ADANIGREEN": "adani-green-energy",
+    "TATAPOWER": "tata-power-company",
+    "YESBANK": "yes-bank",
+    "SUZLON": "suzlon-energy",
+    "ZOMATO": "zomato",
+    "NYKAA": "nykaa",
+    "PAYTM": "one97-communications",
+}
 
-def get_screener_url(ticker_ns):
-    """Convert NSE ticker (e.g., 'RELIANCE.NS') to Screener.in URL.
-    Screener uses the company name, not ticker. We'll try direct ticker first."""
-    # Strip .NS suffix
-    ticker = ticker_ns.replace(".NS", "")
-    return f"https://www.screener.in/company/{ticker}/consolidated/"
+
+def search_screener(ticker, session):
+    """Resolve ticker to Screener.in URL. Screener uses uppercase ticker directly."""
+    # Try uppercase ticker (Screener's primary URL format)
+    url = f"https://www.screener.in/company/{ticker.upper()}/consolidated/"
+    try:
+        resp = session.get(url, timeout=15, allow_redirects=True)
+        if resp.status_code == 200:
+            return url, ticker.upper()
+    except Exception:
+        pass
+
+    # Try without /consolidated/
+    url = f"https://www.screener.in/company/{ticker.upper()}/"
+    try:
+        resp = session.get(url, timeout=15, allow_redirects=True)
+        if resp.status_code == 200:
+            return url, ticker.upper()
+    except Exception:
+        pass
+
+    return None, None
 
 
 def fetch_shareholding(ticker_ns, session=None):
@@ -62,17 +170,20 @@ def fetch_shareholding(ticker_ns, session=None):
     or None if data not found.
     """
     ticker = ticker_ns.replace(".NS", "")
-    url = f"https://www.screener.in/company/{ticker}/consolidated/"
 
     if session is None:
         session = requests.Session()
         session.headers.update(HEADERS)
 
+    url, slug = search_screener(ticker, session)
+    if not url:
+        return None
+
     try:
         resp = session.get(url, timeout=15)
         if resp.status_code != 200:
-            # Try standalone URL
-            url = f"https://www.screener.in/company/{ticker}/"
+            # Try without /consolidated/
+            url = url.replace("/consolidated/", "/")
             resp = session.get(url, timeout=15)
             if resp.status_code != 200:
                 return None
@@ -80,16 +191,13 @@ def fetch_shareholding(ticker_ns, session=None):
         soup = BeautifulSoup(resp.text, "html.parser")
 
         # Find the shareholding pattern section
-        # Screener.in has a section with id "shareholding" or a table with quarterly data
         sh_section = soup.find("section", {"id": "shareholding"})
         if not sh_section:
-            # Try finding by text
             sh_section = soup.find("div", string=re.compile("Shareholding", re.IGNORECASE))
             if sh_section:
                 sh_section = sh_section.find_parent("section") or sh_section.find_parent("div")
 
         if not sh_section:
-            # Try finding any table with shareholding data
             tables = soup.find_all("table")
             for table in tables:
                 header_row = table.find("tr")
@@ -103,7 +211,6 @@ def fetch_shareholding(ticker_ns, session=None):
             return None
 
         # Parse the shareholding table
-        # Expected format: rows with category names, columns with quarter dates
         tables = sh_section.find_all("table") if sh_section.name != "table" else [sh_section]
 
         for table in tables:
@@ -111,11 +218,9 @@ def fetch_shareholding(ticker_ns, session=None):
             if len(rows) < 2:
                 continue
 
-            # Get headers (quarter dates)
             header_cells = rows[0].find_all(["th", "td"])
-            quarters = [cell.get_text(strip=True) for cell in header_cells[1:]]  # Skip first (category name)
+            quarters = [cell.get_text(strip=True) for cell in header_cells[1:]]
 
-            # Find DII and FII rows
             dii_values = {}
             fii_values = {}
 
@@ -127,12 +232,14 @@ def fetch_shareholding(ticker_ns, session=None):
                 category = cells[0].get_text(strip=True).lower()
                 values = []
                 for cell in cells[1:]:
+                    raw = cell.get_text(strip=True).replace(",", "").replace("%", "").strip()
                     try:
-                        val = float(cell.get_text(strip=True).replace(",", ""))
+                        val = float(raw)
                         values.append(val)
                     except (ValueError, AttributeError):
                         values.append(None)
 
+                # Screener uses "DIIs+" and "FIIs+" (with plus suffix)
                 if "dii" in category and "fii" not in category:
                     for i, v in enumerate(values):
                         if v is not None and i < len(quarters):
@@ -143,12 +250,10 @@ def fetch_shareholding(ticker_ns, session=None):
                             fii_values[quarters[i]] = v
 
             if dii_values or fii_values:
-                # Sort quarters chronologically (most recent first in Screener)
                 sorted_dii = sorted(dii_values.items(), key=lambda x: x[0], reverse=True)
                 sorted_fii = sorted(fii_values.items(), key=lambda x: x[0], reverse=True)
 
                 result = {}
-                # DII
                 if len(sorted_dii) >= 1:
                     result["DII_latest"] = sorted_dii[0][1]
                 if len(sorted_dii) >= 2:
@@ -156,7 +261,6 @@ def fetch_shareholding(ticker_ns, session=None):
                 if len(sorted_dii) >= 4:
                     result["DII_4q_ago"] = sorted_dii[3][1]
 
-                # FII
                 if len(sorted_fii) >= 1:
                     result["FII_latest"] = sorted_fii[0][1]
                 if len(sorted_fii) >= 2:
@@ -184,22 +288,18 @@ def compute_changes(data):
     if data is None:
         return result
 
-    # DII Quarter change
     if "DII_latest" in data and "DII_prev" in data:
         val = data["DII_latest"] - data["DII_prev"]
         result["DII Quarter"] = round(val, 2)
 
-    # DII 1Yr change
     if "DII_latest" in data and "DII_4q_ago" in data:
         val = data["DII_latest"] - data["DII_4q_ago"]
         result["DII 1Yr"] = round(val, 2)
 
-    # FII Quarter change
     if "FII_latest" in data and "FII_prev" in data:
         val = data["FII_latest"] - data["FII_prev"]
         result["FII Quarter"] = round(val, 2)
 
-    # FII 1Yr change
     if "FII_latest" in data and "FII_4q_ago" in data:
         val = data["FII_latest"] - data["FII_4q_ago"]
         result["FII 1Yr"] = round(val, 2)
@@ -257,7 +357,6 @@ def update_indian_csv(dii_fii_df):
         if col not in indian_df.columns:
             indian_df[col] = np.nan
 
-    # Merge on Ticker
     dii_fii_df = dii_fii_df.set_index("Ticker")
     for col in ["DII Quarter", "DII 1Yr", "FII Quarter", "FII 1Yr"]:
         indian_df[col] = indian_df["Ticker"].map(dii_fii_df[col]).fillna(indian_df[col])
@@ -267,7 +366,6 @@ def update_indian_csv(dii_fii_df):
 
 
 if __name__ == "__main__":
-    # Load Indian tickers from CSV
     if not os.path.exists(INDIAN_CSV):
         print(f"Error: {INDIAN_CSV} not found. Run collect_indian_data.py first.")
         sys.exit(1)
