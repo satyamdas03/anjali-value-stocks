@@ -717,15 +717,18 @@ def build_small_mid_sheet(wb):
 # ============================================================
 
 if __name__ == "__main__":
+    import sys
+    sp500_only = "--sp500-only" in sys.argv
+
     wb = Workbook()
-    # Remove default sheet
     wb.remove(wb.active)
 
-    # Build S&P 500 sheet
     build_sp500_sheet(wb)
 
-    # Build SmallCap 600 + MidCap 400 sheet
-    build_small_mid_sheet(wb)
+    if not sp500_only:
+        build_small_mid_sheet(wb)
+    else:
+        print("\nSkipping SmallMidCap sheet (--sp500-only flag set)")
 
     wb.save(OUTPUT_PATH)
     print(f"\nSaved Excel to {OUTPUT_PATH}")

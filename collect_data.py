@@ -214,16 +214,11 @@ def collect_stock_data(tickers):
             row["EV/Sales"] = safe_round(info.get("enterpriseToRevenue"))
             row["EV/EBITDA"] = safe_round(info.get("enterpriseToEbitda"))
 
-            # --- Size Metrics ---
+            # --- Size Metrics (.info based) ---
             mc = info.get("marketCap")
             row["Market Cap (Billions)"] = safe_round(mc / 1e9) if mc else None
             rev = info.get("totalRevenue")
             row["Revenue (Billions)"] = safe_round(rev / 1e9) if rev else None
-            # TTM Revenue from annual financials
-            if not fin.empty:
-                ttm_rev = try_financials_row(fin, REVENUE_ROWS, fin.columns[0])
-                if ttm_rev:
-                    row["TTM Revenue (Billions)"] = safe_round(ttm_rev / 1e9)
 
             # --- YoY Growth from .info ---
             rev_g = info.get("revenueGrowth")
@@ -246,6 +241,9 @@ def collect_stock_data(tickers):
                 ni_prev = try_financials_row(fin, INCOME_ROWS, prior_col)
                 if ni_curr and ni_prev and ni_prev != 0:
                     row["NetProfit TTM 1Yr Growth"] = safe_round((ni_curr / ni_prev - 1) * 100, 1)
+                # TTM Revenue from annual financials
+                if rev_curr:
+                    row["TTM Revenue (Billions)"] = safe_round(rev_curr / 1e9)
 
             # --- QoQ Growth from Quarterly Financials ---
             qfin = stock.quarterly_financials
