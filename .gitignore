@@ -1,0 +1,25 @@
+# Excel output (re-generated each run)
+US_Stock_Analysis_Coloured.xlsx
+US_Stock_Analysis.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data collection checkpoints
+*_checkpoint.csv
+collect_progress.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+~$*
+
+# Environment
+.env
+.env.local
