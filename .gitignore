@@ -7,6 +7,8 @@ Indian_Stock_Analysis.xlsx
 US_Stock_Data.csv
 SmallMidCap_Stock_Data.csv
 Indian_Stock_Data.csv
+DII_FII_Data.csv
+Price_Refresh_*.csv
 
 # Python
 __pycache__/
