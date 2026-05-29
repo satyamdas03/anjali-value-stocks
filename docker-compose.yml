@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  anjali-screener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: anjali-screener:latest
+    container_name: anjali-screener
+    volumes:
+      # Mount the project root for live code reload and data persistence during local testing.
+      # Generated CSVs and XLSX files will be written back to the host filesystem.
+      - .:/app
+    environment:
+      - TZ=America/New_York
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

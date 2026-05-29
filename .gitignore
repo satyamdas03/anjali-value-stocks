@@ -1,6 +1,11 @@
 # Excel output (re-generated each run)
 US_Stock_Analysis_Coloured.xlsx
 US_Stock_Analysis.xlsx
+Indian_Stock_Analysis.xlsx
+
+# Data files (re-generated each run)
+US_Stock_Data.csv
+Indian_Stock_Data.csv
 
 # Python
 __pycache__/
@@ -10,6 +15,7 @@ __pycache__/
 # Data collection checkpoints
 *_checkpoint.csv
 collect_progress.txt
+collect_india_progress.txt
 
 # IDE
 .vscode/
@@ -23,3 +29,10 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Logs
+scheduler.log
+*.log
+
+# Docker
+.dockerignore
