@@ -55,7 +55,7 @@ PRICE_REFRESH_SOURCE = '''\
 """
 Lightweight price refresh for all tickers.
 Updates returns, standard deviation, and beta only.
-Outputs: Price_Refresh_SP500.csv, Price_Refresh_NSE.csv
+Outputs: Price_Refresh_SP500.csv, Price_Refresh_SmallMid.csv, Price_Refresh_NSE.csv
 """
 import os
 import sys
@@ -75,6 +75,13 @@ except Exception as e:
     print(f"Warning: could not import collect_data.fetch_sp500_tickers: {e}")
     def fetch_sp500_tickers():
         return []
+
+try:
+    from collect_smallmid_data import fetch_smallmid_tickers
+except Exception as e:
+    print(f"Warning: could not import collect_smallmid_data.fetch_smallmid_tickers: {e}")
+    def fetch_smallmid_tickers():
+        return [], []
 
 try:
     from collect_indian_data import fetch_nifty100_tickers
@@ -159,6 +166,13 @@ if __name__ == "__main__":
         refresh_group(sp500, "SPY", os.path.join(SCRIPT_DIR, "Price_Refresh_SP500.csv"))
     else:
         print("No S&P 500 tickers to refresh.")
+
+    mid_tickers, small_tickers = fetch_smallmid_tickers()
+    smallmid = mid_tickers + small_tickers
+    if smallmid:
+        refresh_group(smallmid, "SPY", os.path.join(SCRIPT_DIR, "Price_Refresh_SmallMid.csv"))
+    else:
+        print("No SmallMidCap tickers to refresh.")
 
     indian = fetch_nifty100_tickers()
     if indian:

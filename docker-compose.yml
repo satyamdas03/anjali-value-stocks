@@ -12,6 +12,6 @@ services:
       # Generated CSVs and XLSX files will be written back to the host filesystem.
       - .:/app
     environment:
-      - TZ=America/New_York
+      - TZ=UTC
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
