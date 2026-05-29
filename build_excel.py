@@ -352,6 +352,175 @@ def try_financials_row(fin, row_names, col_name):
     return None
 
 
+
+def assign_colors(df):
+    """Assign colors for all columns. Returns color DataFrame."""
+    color_df = pd.DataFrame(index=df.index)
+    for col in GROWTH_COLS:
+        if col in df.columns:
+            color_df[col] = color_growth(df, col)
+    for col in RETURN_COLS:
+        if col in df.columns:
+            color_df[col] = color_returns(df, col)
+    for col in VALUATION_COLS:
+        if col in df.columns:
+            color_df[col] = color_valuation(df, col)
+    for col in RISK_COLS:
+        if col in df.columns:
+            color_df[col] = color_risk(df, col)
+    return color_df
+
+
+def compute_scores(df, color_df):
+    """Compute sum-based scores from color assignments."""
+    def sum_scores(r, col_list):
+        total = 0.0
+        for c in col_list:
+            if c in color_df.columns and pd.notna(color_df.at[r.name, c]):
+                total += SCORE_MAP.get(color_df.at[r.name, c], 0)
+        return round(total, 2)
+
+    scores = pd.DataFrame(index=df.index)
+    scores["RETURN SCORE"] = df.apply(lambda r: sum_scores(r, RETURN_COLS), axis=1)
+    scores["GROWTH SCORE"] = df.apply(lambda r: sum_scores(r, GROWTH_SCORE_COLS), axis=1)
+    scores["VALUATION SCORE"] = df.apply(lambda r: sum_scores(r, VALUATION_COLS), axis=1)
+    scores["RISK SCORE"] = df.apply(lambda r: sum_scores(r, RISK_COLS), axis=1)
+    return scores
+
+
+def write_sheet(ws, df, color_df, scores, columns=None, extra_scores=None):
+    """Write data rows to an openpyxl worksheet with color coding.
+    columns: list of (col_key, header, fmt) tuples. Defaults to ALL_COLUMNS."""
+    if columns is None:
+        columns = ALL_COLUMNS
+
+    headers = [h for _, h, _ in columns]
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", wrap_text=True, vertical="center")
+        cell.border = BORDER
+
+    for row_idx, (df_idx, row) in enumerate(df.iterrows(), 2):
+        for col_idx, (col_key, header, fmt) in enumerate(columns, 1):
+            # Scores from main scores df
+            if col_key in scores.columns:
+                value = scores.at[df_idx, col_key]
+            # Extra computed scores (Alpha, Risk, Final Score)
+            elif extra_scores is not None and col_key in extra_scores.columns:
+                value = extra_scores.at[df_idx, col_key]
+            elif col_key in df.columns:
+                value = row.get(col_key)
+            else:
+                value = None
+
+            if pd.isna(value) or value is None:
+                cell = ws.cell(row=row_idx, column=col_idx, value=None)
+            elif fmt and isinstance(value, (int, float, np.floating)):
+                cell = ws.cell(row=row_idx, column=col_idx, value=round(float(value), 4))
+            else:
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+
+            cell.font = DATA_FONT
+            cell.border = BORDER
+            cell.alignment = Alignment(horizontal="center" if col_idx > 3 else "left")
+
+            if fmt and isinstance(value, (int, float, np.floating)) and not pd.isna(value):
+                cell.number_format = fmt
+
+            if col_key in color_df.columns and pd.notna(color_df.at[df_idx, col_key]):
+                color = color_df.at[df_idx, col_key]
+                if color in FILLS:
+                    cell.fill = FILLS[color]
+
+
+def set_column_widths(ws, columns=None):
+    if columns is None:
+        columns = ALL_COLUMNS
+    col_widths = {
+        "Ticker": 10, "NseCode": 12, "Sector": 25, "Sub Sector": 35,
+        "Index Name": 14, "Alpha": 10, "Risk": 10, "Final Score": 12,
+        "Sales YoY Growth": 14, "NetProfit YoY Growth": 14,
+        "Sales TTM 1Yr Growth": 14, "NetProfit TTM 1Yr Growth": 14,
+        "QoQ Sales Growth": 14, "QoQ Profit Growth": 14,
+        "3M Return": 12, "6M Return": 12, "1Yr Return": 12, "2Yr Return": 12,
+        "PE Ratio": 12, "Future PE": 12, "TTM PEG": 12, "Future PEG": 12,
+        "PB Ratio": 12, "EV/Sales": 12, "EV/EBITDA": 12,
+        "Market Cap (B)": 16, "Revenue (B)": 16, "TTM Revenue (B)": 16,
+        "QtrStd": 10, "YrStd": 10, "Qtr Beta": 14, "Yr Beta": 14,
+        "DII Quarter": 14, "DII 1Yr": 14, "FII Quarter": 14, "FII 1Yr": 14,
+        "RETURN SCORE": 14, "GROWTH SCORE": 14,
+        "VALUATION SCORE": 14, "RISK SCORE": 14,
+        "Rebalance Date": 16, "Future Return": 14, "Strategy Stocks": 16, "Stocks List": 14,
+    }
+    for col_idx, (col_key, header, _) in enumerate(columns, 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = col_widths.get(header, 13)
+
+
+def add_legend(ws, start_row):
+    """Add color legend below data."""
+    sr = start_row
+    ws.cell(row=sr, column=1, value="COLOR LEGEND").font = Font(bold=True, size=11)
+    ws.cell(row=sr + 1, column=1, value="Dark Green (+1)").fill = FILLS["DG"]
+    ws.cell(row=sr + 1, column=2, value="Top tier â€” strongest positive signal")
+    ws.cell(row=sr + 2, column=1, value="Light Green (+0.5)").fill = FILLS["LG"]
+    ws.cell(row=sr + 2, column=2, value="Above average")
+    ws.cell(row=sr + 3, column=1, value="White (0)").fill = FILLS["White"]
+    ws.cell(row=sr + 3, column=2, value="Neutral / average / value trap zone")
+    ws.cell(row=sr + 4, column=1, value="Light Red (-0.5)").fill = FILLS["LR"]
+    ws.cell(row=sr + 4, column=2, value="Below average")
+    ws.cell(row=sr + 5, column=1, value="Dark Red (-1)").fill = FILLS["DR"]
+    ws.cell(row=sr + 5, column=2, value="Bottom tier â€” weakest signal")
+
+    ws.cell(row=sr + 7, column=1, value="COLOR HIERARCHIES (matched to sample data):").font = Font(bold=True, size=10)
+    ws.cell(row=sr + 8, column=1, value="Growth: Q1(worst)=DR, Q2=LR, Q3=White, Q4=LG, Q5(best)=DG. Loss-making profit cols=DR.")
+    ws.cell(row=sr + 9, column=1, value="Returns: Q1(worst)=DR, Q2=LR, Q3=White, Q4=LG, Q5(best)=DG. Higher return = better.")
+    ws.cell(row=sr + 10, column=1, value="Valuation: Q1(cheapest)=White(value trap), Q2=DG(sweet spot), Q3=LG, Q4=LR, Q5(most expensive)=DR. NaN=DR.")
+    ws.cell(row=sr + 11, column=1, value="Risk: Q1(safest)=LR(missed returns), Q2=White, Q3=LG, Q4=DG(sweet spot), Q5(riskiest)=DR.")
+    ws.cell(row=sr + 12, column=1, value="Ratios (PB, EV/Sales, EV/EBITDA) + Size (Market Cap, Revenue, TTM Revenue) + DII/FII: UNCOLORED.")
+
+    ws.cell(row=sr + 14, column=1, value="SCORING:").font = Font(bold=True, size=10)
+    ws.cell(row=sr + 15, column=1, value="DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1. Sum across category columns.")
+    ws.cell(row=sr + 16, column=1, value="GROWTH SCORE uses 4 cols (Sales YoY, NetProfit YoY, Sales TTM, NetProfit TTM) â€” QoQ EXCLUDED.")
+    ws.cell(row=sr + 17, column=1, value="Source: Yahoo Finance (yfinance). Benchmark: S&P 500 (SPY) for Beta.")
+    ws.cell(row=sr + 18, column=1, value=f"Future PE = Current PE x (1 + TTM Profit Growth/100)")
+
+
+# ============================================================
+# MAIN S&P 500 SHEET
+# ============================================================
+
+def build_sp500_sheet(wb):
+    """Build S&P 500 sheet from US_Stock_Data.csv."""
+    df = pd.read_csv(CSV_PATH)
+    df = df.drop_duplicates(subset=["Ticker"])
+    df = df.sort_values("Ticker").reset_index(drop=True)
+
+    loss_cols = [c for c in df.columns if c.startswith("_Loss_")]
+    df_clean = df.drop(columns=loss_cols, errors="ignore")
+
+    print(f"Building S&P 500 sheet: {len(df_clean)} stocks, {len(ALL_COLUMNS)} columns")
+
+    color_df = assign_colors(df)
+    scores = compute_scores(df, color_df)
+
+    ws = wb.create_sheet("S&P 500 Analysis")
+    write_sheet(ws, df_clean, color_df, scores)
+    set_column_widths(ws)
+    ws.freeze_panes = "D2"
+    last_col = get_column_letter(len(ALL_COLUMNS))
+    ws.auto_filter.ref = f"A1:{last_col}{len(df_clean) + 1}"
+    add_legend(ws, len(df_clean) + 3)
+
+    print("=== S&P 500 Score Ranges ===")
+    for sc in ["RETURN SCORE", "GROWTH SCORE", "VALUATION SCORE", "RISK SCORE"]:
+        vals = scores[sc]
+        print(f"  {sc}: min={vals.min():.1f}, max={vals.max():.1f}, median={vals.median():.1f}")
+
+    return scores
+
+
 # ============================================================
 # SMALL CAP 600 + MID CAP 400 SHEET
 # ============================================================
@@ -378,10 +547,8 @@ def build_small_mid_sheet(wb):
         idx_df = idx_df.reset_index(drop=True)
         print(f"\n--- {idx_label}: {len(idx_df)} stocks ---")
 
-        # Assign colors within index group
         color_idx = assign_colors(idx_df)
         color_idx["_idx"] = idx_df["Index"].values
-
         scores_idx = compute_scores(idx_df, color_idx)
 
         all_colors.append(color_idx)
@@ -394,10 +561,8 @@ def build_small_mid_sheet(wb):
     final_colors = pd.concat(all_colors, ignore_index=True)
     final_scores = pd.concat(all_scores, ignore_index=True)
 
-    # Clean up for display
     combined_display = combined.drop(columns=[c for c in combined.columns if c.startswith("_Loss_")], errors="ignore")
 
-    # Write sheet
     ws = wb.create_sheet("SmallMidCap Analysis")
     write_sheet(ws, combined_display, final_colors, final_scores)
     set_column_widths(ws)
@@ -408,12 +573,6 @@ def build_small_mid_sheet(wb):
 
     print(f"\nSmallMidCap sheet complete: {len(combined)} stocks")
     return final_scores
-
-
-
-# ============================================================
-# NSE 100 SHEET
-# ============================================================
 
 def build_indian_sheet(wb):
     """Build NSE 100 sheet from Indian_Stock_Data.csv."""
