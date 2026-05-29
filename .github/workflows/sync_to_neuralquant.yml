@@ -12,10 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Checkout NeuralQuant repo
         uses: actions/checkout@v4
@@ -26,15 +26,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install openpyxl pandas requests
-
-      - name: Install NeuralQuant data package
-        run: |
-          pip install -e neuralquant/packages/data
+          pip install pandas numpy requests openpyxl
 
       - name: Ingest Anjali Excel to Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/neuralquant/packages/data/src
         run: |
           python neuralquant/scripts/ingest_anjali_excel.py --path US_Stock_Analysis_Coloured.xlsx
