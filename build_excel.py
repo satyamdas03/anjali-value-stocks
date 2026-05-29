@@ -719,17 +719,26 @@ def build_small_mid_sheet(wb):
 if __name__ == "__main__":
     import sys
     sp500_only = "--sp500-only" in sys.argv
+    smallmid_only = "--smallmid-only" in sys.argv
 
-    wb = Workbook()
-    wb.remove(wb.active)
-
-    build_sp500_sheet(wb)
-
-    if not sp500_only:
+    if smallmid_only:
+        from openpyxl import load_workbook
+        wb = load_workbook(OUTPUT_PATH)
         build_small_mid_sheet(wb)
+        wb.save(OUTPUT_PATH)
+        print(f"\nSaved Excel to {OUTPUT_PATH}")
+        print("Sheets:", wb.sheetnames)
     else:
-        print("\nSkipping SmallMidCap sheet (--sp500-only flag set)")
+        wb = Workbook()
+        wb.remove(wb.active)
 
-    wb.save(OUTPUT_PATH)
-    print(f"\nSaved Excel to {OUTPUT_PATH}")
-    print("Sheets:", wb.sheetnames)
+        build_sp500_sheet(wb)
+
+        if not sp500_only:
+            build_small_mid_sheet(wb)
+        else:
+            print("\nSkipping SmallMidCap sheet (--sp500-only flag set)")
+
+        wb.save(OUTPUT_PATH)
+        print(f"\nSaved Excel to {OUTPUT_PATH}")
+        print("Sheets:", wb.sheetnames)
