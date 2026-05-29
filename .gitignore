@@ -5,6 +5,7 @@ Indian_Stock_Analysis.xlsx
 
 # Data files (re-generated each run)
 US_Stock_Data.csv
+SmallMidCap_Stock_Data.csv
 Indian_Stock_Data.csv
 
 # Python
@@ -16,6 +17,7 @@ __pycache__/
 *_checkpoint.csv
 collect_progress.txt
 collect_india_progress.txt
+collect_smallmid_progress.txt
 
 # IDE
 .vscode/

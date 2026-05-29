@@ -66,8 +66,9 @@
 | Component | File | Input | Output | Frequency | Runtime |
 |-----------|------|-------|--------|-----------|---------|
 | **US Collector** | `collect_data.py` | Wikipedia S&P 500 + yfinance | `US_Stock_Data.csv` | Every 6h | ~25 min |
+| **SmallMid Collector** | `collect_smallmid_data.py` | Wikipedia S&P 400/600 + yfinance | `SmallMidCap_Stock_Data.csv` | Every 6h | ~30 min |
 | **Indian Collector** | `collect_indian_data.py` | Hardcoded 250 NSE + yfinance | `Indian_Stock_Data.csv` | Every 6h | ~5 min |
-| **Excel Builder** | `build_excel.py` | 2 CSVs + Wikipedia S&P 400/600 | `US_Stock_Analysis_Coloured.xlsx` | After full refresh | ~50 min |
+| **Excel Builder** | `build_excel.py` | 3 CSVs | `US_Stock_Analysis_Coloured.xlsx` | After full refresh | ~2 min |
 | **Scheduler** | `scheduler.py` | APScheduler cron | Logs + Excel | 24/7 | Always running |
 
 ---
@@ -77,11 +78,11 @@
 | Step | Action | Source | Destination |
 |------|--------|--------|-------------|
 | 1 | Fetch S&P 500 tickers | Wikipedia | `collect_data.py` |
-| 2 | Fetch S&P 400/600 tickers | Wikipedia | `build_excel.py` (inline) |
+| 2 | Fetch S&P 400/600 tickers | Wikipedia | `collect_smallmid_data.py` |
 | 3 | Fetch 250 NSE tickers | Hardcoded list | `collect_indian_data.py` |
 | 4 | Collect US fundamentals | yfinance | `US_Stock_Data.csv` |
-| 5 | Collect Indian fundamentals | yfinance (.NS suffix) | `Indian_Stock_Data.csv` |
-| 6 | Collect SmallMid fundamentals | yfinance | `build_excel.py` (memory) |
+| 5 | Collect SmallMid fundamentals | yfinance | `SmallMidCap_Stock_Data.csv` |
+| 6 | Collect Indian fundamentals | yfinance (.NS suffix) | `Indian_Stock_Data.csv` |
 | 7 | Compute colors + scores | pandas quantiles | Color DataFrame |
 | 8 | Write 3-sheet Excel | openpyxl | `.xlsx` file |
 | 9 | Health check | Railway | HTTP 200 |
@@ -213,7 +214,7 @@ Score map: DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1
 | `--sp500-only` | `build_excel.py` | Build only S&P 500 sheet |
 | `--smallmid-only` | `build_excel.py` | Build only SmallMidCap sheet (adds to existing Excel) |
 | `--india-only` | `build_excel.py` | Build only NSE 100 sheet |
-| `--us-only` | `build_excel.py` | Build US + SmallMid, skip Indian |
+| `--us-only` | `build_excel.py` | Build S&P 500 + SmallMid, skip Indian |
 
 ---
 
@@ -250,8 +251,9 @@ Score map: DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1
 | File | Type | Purpose | Lines |
 |------|------|---------|-------|
 | `collect_data.py` | Active | US S&P 500 collector | ~350 |
+| `collect_smallmid_data.py` | Active | SmallCap 600 + MidCap 400 collector | ~330 |
 | `collect_indian_data.py` | Active | Indian NSE 250 collector | ~380 |
-| `build_excel.py` | Active | Excel builder (3 sheets) | ~450 |
+| `build_excel.py` | Active | Excel builder (3 sheets, CSV-only) | ~370 |
 | `scheduler.py` | Active | APScheduler orchestrator | ~150 |
 | `requirements.txt` | Config | Python dependencies | 6 |
 | `Dockerfile` | Config | Container image | 30 |
@@ -264,6 +266,7 @@ Score map: DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1
 | `build_us_stock_sheet.py` | Archived | Old 3-script pipeline | 681 |
 | `enrich_data.py` | Archived | Old enricher | 123 |
 | `US_Stock_Data.csv` | Data | US 503 stocks | — |
+| `SmallMidCap_Stock_Data.csv` | Data | SmallMidCap ~1000 stocks | — |
 | `Indian_Stock_Data.csv` | Data | Indian 250 stocks | — |
 | `US_Stock_Analysis_Coloured.xlsx` | Output | 3-sheet Excel | — |
 
@@ -279,7 +282,6 @@ Score map: DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1
 | 4 | NSE tickers are hardcoded | List may drift from actual index | Annual review; no reliable free API for NSE constituents |
 | 5 | yfinance rate limits | Occasional 429 errors | 0.3s delay per stock; checkpoint resume |
 | 6 | Sector-relative coloring not implemented | All stocks compared globally | Planned enhancement |
-| 7 | SmallMidCap data collected inline | Re-collected on every Excel build | Could be separated to own collector |
 
 ---
 

@@ -209,11 +209,16 @@ def run_script(script_name, cwd=None):
 
 
 def full_refresh():
-    """Run the full pipeline: US data -> Indian data -> Excel build."""
+    """Run the full pipeline: US data -> SmallMid data -> Indian data -> Excel build."""
     logger.info("=== Full refresh started ===")
     ok = run_script("collect_data.py")
     if not ok:
         logger.error("Full refresh chain aborted after collect_data.py")
+        return
+
+    ok = run_script("collect_smallmid_data.py")
+    if not ok:
+        logger.error("Full refresh chain aborted after collect_smallmid_data.py")
         return
 
     ok = run_script("collect_indian_data.py")
