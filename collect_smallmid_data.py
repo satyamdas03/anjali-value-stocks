@@ -232,6 +232,11 @@ def collect_stock_data(tickers, index_label):
                     row["QoQ Profit Growth"] = 500.0
                 elif row["QoQ Profit Growth"] < -500:
                     row["QoQ Profit Growth"] = -500.0
+            if row["NetProfit TTM 1Yr Growth"] is not None:
+                if row["NetProfit TTM 1Yr Growth"] > 500:
+                    row["NetProfit TTM 1Yr Growth"] = 500.0
+                elif row["NetProfit TTM 1Yr Growth"] < -500:
+                    row["NetProfit TTM 1Yr Growth"] = -500.0
 
             if row["PE Ratio"] is not None and row["NetProfit TTM 1Yr Growth"] is not None:
                 row["Future PE"] = safe_round(row["PE Ratio"] * (1 + row["NetProfit TTM 1Yr Growth"] / 100))

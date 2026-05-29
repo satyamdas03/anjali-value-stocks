@@ -267,12 +267,17 @@ def collect_stock_data(tickers):
                     eqg = info.get("earningsQuarterlyGrowth")
                     row["QoQ Profit Growth"] = safe_round(eqg * 100) if eqg is not None else None
 
-            # --- Cap extreme QoQ Profit Growth ---
+            # --- Cap extreme growth values ---
             if row["QoQ Profit Growth"] is not None:
                 if row["QoQ Profit Growth"] > 500:
                     row["QoQ Profit Growth"] = 500.0
                 elif row["QoQ Profit Growth"] < -500:
                     row["QoQ Profit Growth"] = -500.0
+            if row["NetProfit TTM 1Yr Growth"] is not None:
+                if row["NetProfit TTM 1Yr Growth"] > 500:
+                    row["NetProfit TTM 1Yr Growth"] = 500.0
+                elif row["NetProfit TTM 1Yr Growth"] < -500:
+                    row["NetProfit TTM 1Yr Growth"] = -500.0
 
             # --- Future PE = Current PE * (1 + TTM Profit Growth / 100) ---
             if row["PE Ratio"] is not None and row["NetProfit TTM 1Yr Growth"] is not None:
