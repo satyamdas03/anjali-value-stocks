@@ -1,0 +1,40 @@
+name: Sync Anjali Data to NeuralQuant
+
+on:
+  push:
+    paths:
+      - 'US_Stock_Analysis_Coloured.xlsx'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Checkout NeuralQuant repo
+        uses: actions/checkout@v4
+        with:
+          repository: satyamdas03/NeuralQuant
+          token: ${{ secrets.NEURALQUANT_PAT }}
+          path: neuralquant
+
+      - name: Install dependencies
+        run: |
+          pip install openpyxl pandas requests
+
+      - name: Install NeuralQuant data package
+        run: |
+          pip install -e neuralquant/packages/data
+
+      - name: Ingest Anjali Excel to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python neuralquant/scripts/ingest_anjali_excel.py --path US_Stock_Analysis_Coloured.xlsx
