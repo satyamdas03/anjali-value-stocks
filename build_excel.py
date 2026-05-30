@@ -124,6 +124,14 @@ LOSS_FLAG_MAP = {
 
 UNCOLORED_COLS = RATIO_COLS + SIZE_COLS + ["DII Quarter", "DII 1Yr", "FII Quarter", "FII 1Yr"]
 
+# SmallMidCap uses the same columns as SP500 but with Index inserted after Ticker
+SMALLMID_COLUMNS = [
+    ("Ticker", "Ticker", None),
+    ("Index", "Index", None),
+    ("Sector", "Sector", None),
+    ("Sub Sector", "Sub Sector", None),
+] + ALL_COLUMNS[3:]  # everything after Sub Sector
+
 # --- Indian sheet column layout (matches sample data) ---
 INDIAN_ALL_COLUMNS = [
     # Core
@@ -564,10 +572,10 @@ def build_small_mid_sheet(wb):
     combined_display = combined.drop(columns=[c for c in combined.columns if c.startswith("_Loss_")], errors="ignore")
 
     ws = wb.create_sheet("SmallMidCap Analysis")
-    write_sheet(ws, combined_display, final_colors, final_scores)
-    set_column_widths(ws)
-    ws.freeze_panes = "D2"
-    last_col = get_column_letter(len(ALL_COLUMNS))
+    write_sheet(ws, combined_display, final_colors, final_scores, columns=SMALLMID_COLUMNS)
+    set_column_widths(ws, columns=SMALLMID_COLUMNS)
+    ws.freeze_panes = "C2"
+    last_col = get_column_letter(len(SMALLMID_COLUMNS))
     ws.auto_filter.ref = f"A1:{last_col}{len(combined_display) + 1}"
     add_legend(ws, len(combined_display) + 3)
 

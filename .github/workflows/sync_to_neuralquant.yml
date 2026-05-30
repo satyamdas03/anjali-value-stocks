@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas numpy requests openpyxl
+          pip install pandas numpy requests openpyxl supabase
 
       - name: Ingest Anjali Excel to Supabase
         env:
