@@ -1,0 +1,89 @@
+name: Anjali Data Refresh
+
+on:
+  schedule:
+    - cron: '30 21 * * 1-5'   # US: 4:30pm ET = 21:30 UTC (Mon-Fri)
+    - cron: '15 10 * * 1-5'   # IN: 3:45pm IST = 10:15 UTC (Mon-Fri)
+  workflow_dispatch:
+    inputs:
+      cycle:
+        description: 'Which market cycle to run'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - us
+          - india
+          - both
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restore CSV cache so we only re-collect the market that just closed
+      - name: Restore cached data files
+        uses: actions/cache@v4
+        with:
+          path: |
+            US_Stock_Data.csv
+            SmallMidCap_Stock_Data.csv
+            Indian_Stock_Data.csv
+          key: anjali-data-${{ github.run_id }}
+          restore-keys: |
+            anjali-data-
+
+      - name: Determine cycle
+        id: cycle
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "cycle=${{ github.event.inputs.cycle }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 21 * * 1-5" ]; then
+            echo "cycle=us" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "15 10 * * 1-5" ]; then
+            echo "cycle=india" >> "$GITHUB_OUTPUT"
+          else
+            echo "cycle=both" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Running cycle: $(cat $GITHUB_OUTPUT | grep cycle | cut -d= -f2)"
+
+      # ── US CYCLE ──────────────────────────────────────────
+      - name: Collect S&P 500 data
+        if: steps.cycle.outputs.cycle == 'us' || steps.cycle.outputs.cycle == 'both'
+        run: python collect_data.py
+
+      - name: Collect SmallMidCap data
+        if: steps.cycle.outputs.cycle == 'us' || steps.cycle.outputs.cycle == 'both'
+        run: python collect_smallmid_data.py
+
+      # ── IN CYCLE ──────────────────────────────────────────
+      - name: Collect Indian NSE 250 data
+        if: steps.cycle.outputs.cycle == 'india' || steps.cycle.outputs.cycle == 'both'
+        run: python collect_indian_data.py
+
+      - name: Scrape DII/FII shareholding data
+        if: steps.cycle.outputs.cycle == 'india' || steps.cycle.outputs.cycle == 'both'
+        run: python scrape_dii_fii.py --update
+
+      # ── BUILD & PUSH ─────────────────────────────────────
+      - name: Build Excel (all 3 sheets)
+        run: python build_excel.py
+
+      - name: Commit and push updated Excel
+        run: |
+          git config user.name "Anjali Bot"
+          git config user.email "bot@anjali-value-stocks.dev"
+          git add US_Stock_Analysis_Coloured.xlsx
+          git diff --cached --quiet || git commit -m "auto: refresh ${{ steps.cycle.outputs.cycle }} cycle data ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git push

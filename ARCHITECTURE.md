@@ -197,13 +197,25 @@ Score map: DG=+1, LG=+0.5, White=0, LR=-0.5, DR=-1
 
 ---
 
-## 7. Cron Schedule
+## 7. Cron Schedule (GitHub Actions)
 
-| Job | Expression | Meaning | Action |
-|-----|-----------|---------|--------|
-| **Full Refresh** | `0 0,6,12,18 * * *` | Every 6 hours at :00 | `collect_data.py` + `collect_indian_data.py` + `build_excel.py` |
-| **Price Refresh** | `*/30 * * * *` | Every 30 minutes | Placeholder (delegates to full refresh for now) |
-| **Health Log** | Every 10 minutes | Internal | Prints alive status to scheduler.log |
+Fundamental data (P/E, growth, quintile rankings) only changes at market close. Twice daily is the sweet spot.
+
+| Job | Cron (UTC) | Market Time | Action |
+|-----|-----------|-------------|--------|
+| **US Cycle** | `30 21 * * 1-5` | 4:30 PM ET (30 min after US close) | `collect_data.py` + `collect_smallmid_data.py` → `build_excel.py` → git push |
+| **IN Cycle** | `15 10 * * 1-5` | 3:45 PM IST (15 min after NSE close) | `collect_indian_data.py` + `scrape_dii_fii.py` → `build_excel.py` → git push |
+
+Each git push auto-triggers `sync_to_neuralquant.yml` → Supabase refresh.
+
+**Why NOT continuous:** Continuous loops burn ~50K+ API calls/day for data that's identical intraday. Twice daily = ~3,632 calls total. Safe for rate limits.
+
+| Workflow | File | Trigger |
+|----------|------|---------|
+| **Anjali Refresh** | `.github/workflows/anjali_refresh.yml` | Cron (2× daily) + manual dispatch |
+| **Sync to NeuralQuant** | `.github/workflows/sync_to_neuralquant.yml` | Push to `US_Stock_Analysis_Coloured.xlsx` + manual dispatch |
+
+**scheduler.py** is retained for local Docker testing but deprecated for production — GHA cron is the primary pipeline.
 
 ---
 
