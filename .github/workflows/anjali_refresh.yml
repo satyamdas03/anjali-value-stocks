@@ -16,6 +16,9 @@ on:
           - india
           - both
 
+permissions:
+  contents: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
