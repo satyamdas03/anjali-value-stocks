@@ -502,6 +502,13 @@ def add_legend(ws, start_row):
 def build_sp500_sheet(wb):
     """Build S&P 500 sheet from US_Stock_Data.csv."""
     df = pd.read_csv(CSV_PATH)
+    # Coerce loss flag columns to boolean (CSV roundtrip may leave them as int/string)
+    for col in df.columns:
+        if col.startswith("_Loss_"):
+            df[col] = df[col].map({True: True, "True": True, "true": True, 1: True, "1": True,
+                                   False: False, "False": False, "false": False, 0: False, "0": False,
+                                   -1: True, "-1": True, -2: True, "-2": True})
+            df[col] = df[col].fillna(False).astype(bool)
     df = df.drop_duplicates(subset=["Ticker"])
     df = df.sort_values("Ticker").reset_index(drop=True)
 
@@ -542,6 +549,13 @@ def build_small_mid_sheet(wb):
         return None
 
     combined = pd.read_csv(SMALLMID_CSV_PATH)
+    # Coerce loss flag columns to boolean
+    for col in combined.columns:
+        if col.startswith("_Loss_"):
+            combined[col] = combined[col].map({True: True, "True": True, "true": True, 1: True, "1": True,
+                                                False: False, "False": False, "false": False, 0: False, "0": False,
+                                                -1: True, "-1": True, -2: True, "-2": True})
+            combined[col] = combined[col].fillna(False).astype(bool)
     combined = combined.drop_duplicates(subset=["Ticker"])
     combined = combined.sort_values(["Index", "Ticker"]).reset_index(drop=True)
 
@@ -590,6 +604,13 @@ def build_indian_sheet(wb):
         return None
 
     df = pd.read_csv(indian_csv)
+    # Coerce loss flag columns to boolean
+    for col in df.columns:
+        if col.startswith("_Loss_"):
+            df[col] = df[col].map({True: True, "True": True, "true": True, 1: True, "1": True,
+                                   False: False, "False": False, "false": False, 0: False, "0": False,
+                                   -1: True, "-1": True, -2: True, "-2": True})
+            df[col] = df[col].fillna(False).astype(bool)
     df = df.drop_duplicates(subset=["Ticker"])
     df = df.sort_values("Ticker").reset_index(drop=True)
 
