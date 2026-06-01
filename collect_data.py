@@ -329,6 +329,14 @@ def collect_stock_data(tickers):
 
 def _print_summary(df):
     """Print data completeness summary."""
+    # Coerce numeric columns — yfinance failures leave None → dtype=object
+    numeric_cols = ["1Yr Return", "2Yr Return", "3M Return", "6M Return",
+                    "PE Ratio", "Future PE", "PB Ratio", "EV/Sales", "EV/EBITDA",
+                    "Market Cap (Billions)", "Qtr Beta", "Yr Beta"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
     print("\n=== Column Fill Rates ===")
     for col in COLUMNS:
         if col.startswith("_"):
