@@ -41,11 +41,67 @@ COLUMNS = [
 ]
 
 
+# NSE publishes official constituent lists; archives host is the reliable one.
+_NSE_LIST_URLS = {
+    "NIFTY100": "https://archives.nseindia.com/content/indices/ind_nifty100list.csv",
+    "MIDCAP150": "https://archives.nseindia.com/content/indices/ind_niftymidcap150list.csv",
+    "NIFTY500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
+}
+_NSE_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+# Cap-segment label per ticker, filled by fetch_nifty100_tickers().
+# Labels match what NeuralQuant's portfolio pools filter by:
+#   NIFTY100 -> large cap, NIFTY200 -> mid cap, NSE250 -> small cap.
+INDEX_LABELS: dict = {}
+
+
+def _fetch_symbol_set(url):
+    """Download an NSE constituent CSV and return the set of symbols."""
+    import io
+    import requests as _rq
+    r = _rq.get(url, headers=_NSE_UA, timeout=30)
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.text))
+    col = "Symbol" if "Symbol" in df.columns else df.columns[2]
+    return {str(s).strip().upper() for s in df[col].dropna()}
+
+
 def fetch_nifty100_tickers():
-    """Return hardcoded NSE ticker list extracted from sample data.
-    Wikipedia has no NIFTY 100 constituents table."""
-    print("Using hardcoded NSE ticker list (250 stocks from sample data)...")
-    return _fallback_tickers()
+    """Return the NIFTY 500 universe from NSE's official constituent lists,
+    labelling each ticker with its cap segment in INDEX_LABELS.
+
+    Falls back to the hardcoded 250-ticker list if the download fails, so a
+    blocked NSE endpoint can never blank out the universe.
+    """
+    try:
+        n500 = _fetch_symbol_set(_NSE_LIST_URLS["NIFTY500"])
+        if len(n500) < 400:
+            raise ValueError(f"NIFTY500 list suspiciously small: {len(n500)}")
+        try:
+            n100 = _fetch_symbol_set(_NSE_LIST_URLS["NIFTY100"])
+        except Exception:
+            n100 = set()
+        try:
+            mid150 = _fetch_symbol_set(_NSE_LIST_URLS["MIDCAP150"])
+        except Exception:
+            mid150 = set()
+        INDEX_LABELS.clear()
+        for sym in n500:
+            if sym in n100:
+                INDEX_LABELS[sym] = "NIFTY100"
+            elif sym in mid150:
+                INDEX_LABELS[sym] = "NIFTY200"
+            else:
+                INDEX_LABELS[sym] = "NSE250"
+        print(f"Using official NIFTY 500 list ({len(n500)} stocks: "
+              f"{sum(1 for v in INDEX_LABELS.values() if v=='NIFTY100')} large, "
+              f"{sum(1 for v in INDEX_LABELS.values() if v=='NIFTY200')} mid, "
+              f"{sum(1 for v in INDEX_LABELS.values() if v=='NSE250')} small)...")
+        return sorted(n500)
+    except Exception as e:
+        print(f"NIFTY 500 download failed ({e}) — using hardcoded fallback list")
+        INDEX_LABELS.clear()
+        return _fallback_tickers()
 
 
 def _fallback_tickers():
@@ -138,7 +194,7 @@ def collect_stock_data(tickers):
         ticker = f"{ticker_raw}.NS"
         row = {col: None for col in COLUMNS}
         row["Ticker"] = ticker_raw
-        row["Index Name"] = "LM 250"
+        row["Index Name"] = INDEX_LABELS.get(ticker_raw, "NSE250") if INDEX_LABELS else "LM 250"
 
         try:
             stock = yf.Ticker(ticker)
